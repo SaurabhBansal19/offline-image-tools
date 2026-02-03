@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Image Toolkit — Offline (Dark Mode + Stats)</title>
+  <style>
+    /* CSS Variables for Theme Support */
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --border: #e2e8f0;
+      --drop: #cbd5e1;
+      --accent: #2563eb;
+      --accent-fg: #ffffff;
+      --secondary: #64748b;
+      --success-bg: #dcfce7;
+      --success-text: #166534;
+      --success-border: #bbf7d0;
+    }
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f1f5f9;
+      --border: #334155;
+      --drop: #475569;
+      --accent: #3b82f6;
+      --accent-fg: #ffffff;
+      --secondary: #94a3b8;
+      --success-bg: #064e3b;
+      --success-text: #86efac;
+      --success-border: #065f46;
+    }
+
+    body { max-width: 980px; margin: 0 auto; padding: 12px; font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); transition: background 0.3s, color 0.3s; }
+    h1 { font-size: 20px; margin: 0; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    
+    .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .mode-btn { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; min-width: 110px; text-align: center; transition: all 0.2s; }
+    .mode-btn:hover { border-color: var(--accent); }
+    .mode-btn.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 500; }
+    
+    .panel { display: none; }
+    .panel.active { display: block; }
+    
+    .drop { border: 2px dashed var(--drop); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; margin: 12px 0; background: var(--card); transition: border-color 0.2s; }
+    .drop:hover { border-color: var(--accent); }
+    
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: var(--card); padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
+    
+    .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
+    .thumb { border: 1px solid var(--border); padding: 10px; border-radius: 8px; font-size: 12px; display: flex; flex-direction: column; align-items: center; position: relative; overflow: hidden; background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .thumb img { max-width: 100%; height: 120px; object-fit: contain; margin: 4px 0; border-radius: 4px; }
+    
+    .btn { background: var(--accent); color: var(--accent-fg); padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn.secondary { background: var(--secondary); color: white; }
+    
+    .status { margin-top: 12px; padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); white-space: pre-line; display: none; }
+    
+    .savings-bar { margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); font-weight: 500; display: none; text-align: center; }
+    
+    label { font-size: 13px; font-weight: 500; }
+    .small { font-size: 12px; opacity: 0.7; }
+    
+    .slider-group { display: flex; align-items: center; gap: 6px; background: var(--bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); }
+    .tiny-input { width: 40px; text-align: center; padding: 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+    
+    .resize-toggle { display: flex; gap: 12px; align-items: center; background: var(--bg); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); }
+    .resize-opt { cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+    
+    .size-filter { display: flex; gap: 6px; align-items: center; }
+    .small-input { width: 70px; padding: 5px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+    
+    .spinner { border: 3px solid var(--border); border-top: 3px solid var(--accent); border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-left: 6px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    
+    .thumb-footer { margin-top: 8px; width: 100%; display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
+    .thumb-footer a { text-decoration: none; width: 100%; text-align: center; }
+    
+    .quality-control { display: flex; align-items: center; gap: 6px; margin-top: 6px; width: 100%; justify-content: center; }
+    .selected-highlight { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+    
+    footer { margin-top: 30px; font-size: 12px; opacity: 0.6; text-align: center; }
+    
+    /* Dark Mode Toggle Switch */
+    .theme-switch { background: none; border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+    .theme-switch:hover { background: var(--bg); }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Image Toolkit — Offline</h1>
+    <button id="themeToggle" class="theme-switch">🌙 Dark Mode</button>
+  </div>
+
+  <div class="toolbar">
+    <button type="button" class="mode-btn active" data-mode="png2jpg">PNG → JPG</button>
+    <button type="button" class="mode-btn" data-mode="jfif2jpg">JFIF → JPG</button>
+    <button type="button" class="mode-btn" data-mode="jpgtools">JPG Compress</button>
+    <button type="button" class="mode-btn" data-mode="resize">Batch Resize</button>
+    <button type="button" class="mode-btn" data-mode="crop">Crop</button>
+    <button type="button" class="mode-btn" data-mode="pngreduce">PNG Reduce</button>
+    <div style="flex:1"></div>
+    <button id="estimateToggle" type="button" class="btn secondary" style="font-size:11px; padding:4px 8px;">Estimates: On</button>
+  </div>
+
+  <div id="png2jpg" class="panel active">
+    <div class="drop" id="pngDrop">Drop PNG files here
+      <div style="margin-top:8px">
+        <button id="pngChoose" class="btn secondary">Choose files</button>
+        <button id="pngChooseFolder" class="btn secondary">Choose folder</button>
+        <input id="pngFileInput" type="file" accept="image/png" multiple style="display:none">
+        <input id="pngFolderInput" type="file" webkitdirectory directory multiple style="display:none">
+      </div>
+    </div>
+    <div class="controls">
+      <label><input id="pngSelectAll" type="checkbox" checked> Select All</label>
+      <div class="slider-group">
+        <label>Quality:</label>
+        <input id="pngDefaultQ" type="range" min="10" max="100" value="90">
+        <input id="pngDefaultQt" type="number" min="10" max="100" value="90" class="tiny-input">
+        <span class="small">%</span>
+      </div>
+      <label>Sort:</label>
+      <select id="pngSort" class="small-input"><option value="none">None</option><option value="size-asc">Size ↑</option><option value="size-desc">Size ↓</option></select>
+      <div class="size-filter">
+        <select id="pngSizeOp" class="small-input"><option value="gt">&gt; KB</option><option value="lt">&lt; KB</option></select>
+        <input id="pngSizeVal" type="number" class="small-input" placeholder="0">
+        <button class="btn secondary" id="pngApplySize">Filter</button>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn" id="pngConvert" disabled>Convert All</button>
+      <button class="btn" id="pngZip" disabled>Download ZIP</button>
+    </div>
+    <div id="pngStatus" class="status"></div>
+    <div id="pngSavings" class="savings-bar"></div>
+    <div class="thumbs" id="pngOrig"></div>
+    <div class="thumbs" id="pngConv"></div>
+  </div>
+
+  <div id="jfif2jpg" class="panel">
+    <div class="drop" id="jfifDrop">Drop JFIF files here
+      <div style="margin-top:8px">
+        <button id="jfifChoose" class="btn secondary">Choose files</button>
+        <button id="jfifChooseFolder" class="btn secondary">Choose folder</button>
+        <input id="jfifFileInput" type="file" multiple style="display:none">
+        <input id="jfifFolderInput" type="file" webkitdirectory directory multiple style="display:none">
+      </div>
+    </div>
+    <div class="controls">
+      <label><input id="jfifSelectAll" type="checkbox" checked> Select All</label>
+      <div class="slider-group">
+        <label>Quality:</label>
+        <input id="jfifDefaultQ" type="range" min="10" max="100" value="95">
+        <input id="jfifDefaultQt" type="number" min="10" max="100" value="95" class="tiny-input">
+        <span class="small">%</span>
+      </div>
+      <label>Sort:</label>
+      <select id="jfifSort" class="small-input"><option value="none">None</option><option value="size-asc">Size ↑</option><option value="size-desc">Size ↓</option></select>
+      <div style="flex:1"></div>
+      <button class="btn" id="jfifConvert" disabled>Convert to JPG</button>
+      <button class="btn" id="jfifZip" disabled>Download ZIP</button>
+    </div>
+    <div id="jfifStatus" class="status"></div>
+    <div id="jfifSavings" class="savings-bar"></div>
+    <div class="thumbs" id="jfifOrig"></div>
+    <div class="thumbs" id="jfifConv"></div>
+  </div>
+
+  <div id="jpgtools" class="panel">
+    <div class="drop" id="jpgDrop">Drop JPG files here
+      <div style="margin-top:8px">
+        <button class="btn secondary" id="jpgChoose">Choose files</button>
+        <button class="btn secondary" id="jpgChooseFolder">Choose folder</button>
+        <input id="jpgFileInput" type="file" accept="image/jpeg" multiple style="display:none">
+        <input id="jpgFolderInput" type="file" webkitdirectory directory multiple style="display:none">
+      </div>
+    </div>
+    <div class="controls">
+      <label><input id="jpgSelectAll" type="checkbox" checked> Select All</label>
+      <div class="slider-group">
+        <label>Quality:</label>
+        <input id="jpgQ" type="range" min="10" max="100" value="80">
+        <input id="jpgQt" type="number" min="10" max="100" value="80" class="tiny-input">
+        <span class="small">%</span>
+      </div>
+      <label>Sort:</label>
+      <select id="jpgSort" class="small-input"><option value="none">None</option><option value="size-asc">Size ↑</option><option value="size-desc">Size ↓</option></select>
+      <div class="size-filter">
+        <select id="jpgSizeOp" class="small-input"><option value="gt">&gt; KB</option><option value="lt">&lt; KB</option></select>
+        <input id="jpgSizeVal" type="number" class="small-input" placeholder="0">
+        <button class="btn secondary" id="jpgApplySize">Filter</button>
+      </div>
+      <label>W:</label><input id="jpgW" type="number" placeholder="auto" class="small-input" style="width:60px">
+      <label>H:</label><input id="jpgH" type="number" placeholder="auto" class="small-input" style="width:60px">
+      <div style="flex:1"></div>
+      <button class="btn" id="jpgProcess" disabled>Process</button>
+      <button class="btn" id="jpgZip" disabled>Download ZIP</button>
+    </div>
+    <div id="jpgStatus" class="status"></div>
+    <div id="jpgSavings" class="savings-bar"></div>
+    <div class="thumbs" id="jpgThumbs"></div>
+  </div>
+
+  <div id="resize" class="panel">
+    <div class="drop" id="anyDrop">Drop images here
+      <div style="margin-top:8px">
+        <button class="btn secondary" id="anyChoose">Choose files</button>
+        <button class="btn secondary" id="anyChooseFolder">Choose folder</button>
+        <input id="anyFileInput" type="file" accept="image/*" multiple style="display:none">
+        <input id="anyFolderInput" type="file" webkitdirectory directory multiple style="display:none">
+      </div>
+    </div>
+    <div class="controls">
+      <label><input id="anySelectAll" type="checkbox" checked> All</label>
+      <div class="resize-toggle">
+         <label class="resize-opt"><input type="radio" name="resizeMode" value="pct" checked> By %</label>
+         <label class="resize-opt"><input type="radio" name="resizeMode" value="fixed"> Pixels</label>
+      </div>
+      <div id="resizePctGroup" class="slider-group">
+        <label>Scale:</label>
+        <input id="anyPct" type="range" min="10" max="200" value="50">
+        <input id="anyPctT" type="number" min="10" max="200" value="50" class="tiny-input">
+        <span class="small">%</span>
+      </div>
+      <div id="resizeFixedGroup" style="display:none; gap:6px; align-items:center;">
+        <label>W:</label><input id="anyW" type="number" placeholder="auto" class="small-input">
+        <label>H:</label><input id="anyH" type="number" placeholder="auto" class="small-input">
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn" id="anyProcess" disabled>Resize</button>
+      <button class="btn" id="anyZip" disabled>Download ZIP</button>
+    </div>
+    <div id="anyStatus" class="status"></div>
+    <div id="anySavings" class="savings-bar"></div>
+    <div class="thumbs" id="anyThumbs"></div>
+  </div>
+
+  <div id="crop" class="panel">
+    <div class="drop" id="cropDrop">Drop images here
+      <div style="margin-top:8px">
+        <button class="btn secondary" id="cropChoose">Choose files</button>
+        <button class="btn secondary" id="cropChooseFolder">Choose folder</button>
+        <input id="cropFileInput" type="file" accept="image/*" multiple style="display:none">
+        <input id="cropFolderInput" type="file" webkitdirectory directory multiple style="display:none">
+      </div>
+    </div>
+    <div class="controls">
+      <label><input id="cropSelectAll" type="checkbox" checked> All</label>
+      <div class="slider-group">
+        <label>W%:</label>
+        <input id="cropGlobalW" type="range" min="10" max="100" value="100">
+        <span id="cropGlobalWv" class="small">100%</span>
+      </div>
+      <div class="slider-group">
+        <label>H%:</label>
+        <input id="cropGlobalH" type="range" min="10" max="100" value="100">
+        <span id="cropGlobalHv" class="small">100%</span>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn" id="cropProcess" disabled>Crop</button>
+      <button class="btn" id="cropZip" disabled>Download ZIP</button>
+    </div>
+    <div id="cropStatus" class="status"></div>
+    <div id="cropSavings" class="savings-bar"></div>
+    <div class="thumbs" id="cropThumbs"></div>
+  </div>
+
+  <div id="pngreduce" class="panel">
+    <div class="drop" id="pngRedDrop">Drop PNGs here
+      <div style="margin-top:8px">
+        <button class="btn secondary" id="pngRedChoose">Choose files</button>
+        <button class="btn secondary" id="pngRedChooseFolder">Choose folder</button>
+        <input id="pngRedFileInput" type="file" accept="image/png" multiple style="display:none">
+        <input id="pngRedFolderInput" type="file" webkitdirectory directory multiple style="display:none">
+      </div>
+    </div>
+    <div class="controls">
+      <label><input id="pngRedSelectAll" type="checkbox" checked> All</label>
+      <div class="slider-group">
+        <label>Colors:</label>
+        <input id="pngRedPct" type="range" min="5" max="100" value="100">
+        <span id="pngRedPctv" class="small">100%</span>
+      </div>
+      <label>Max W:</label><input id="pngRedW" type="number" placeholder="auto" class="small-input">
+      <div style="flex:1"></div>
+      <button class="btn" id="pngRedProcess" disabled>Reduce</button>
+      <button class="btn" id="pngRedZip" disabled>Download ZIP</button>
+    </div>
+    <div id="pngRedStatus" class="status"></div>
+    <div id="pngRedSavings" class="savings-bar"></div>
+    <div class="thumbs" id="pngRedThumbs"></div>
+  </div>
+
+  <footer>
+    Files are processed entirely on your device. "Download ZIP" uses JSZip.
+  </footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// --- UTILS & SANITIZATION ---
+function safeGet(id){ return document.getElementById(id); }
+function show(el,msg){ if(!el) return; el.style.display='block'; el.textContent=msg; }
+// Strict Sanitization: Replace any character that is not alphanumeric, dot, dash, or underscore.
+function sanitizeFilename(name) {
+    let s = name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    return s.substring(0, 100); // Limit length just in case
+}
+function timestamp() { const d = new Date(); return d.getHours().toString().padStart(2,'0') + d.getMinutes().toString().padStart(2,'0') + d.getSeconds().toString().padStart(2,'0'); }
+
+// --- THEME ---
+const themeToggle = safeGet('themeToggle');
+let isDark = false;
+themeToggle.addEventListener('click', ()=>{
+    isDark = !isDark;
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    themeToggle.textContent = isDark ? '☀️ Light Mode' : '🌙 Dark Mode';
+});
+
+// --- ZIP LOADER ---
+async function loadJSZip(){ if(window.JSZip) return true; return new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; s.onload=()=>r(true); s.onerror=()=>r(false); document.head.appendChild(s); }); }
+
+// --- STATS ---
+function updateSavingsStats(files, outputKey, containerId) {
+    const el = safeGet(containerId);
+    if(!el) return;
+    let originalTotal = 0;
+    let newTotal = 0;
+    let count = 0;
+    files.forEach(f => {
+        if(f.selected !== false && f[outputKey]) {
+            originalTotal += f.file.size;
+            newTotal += f[outputKey].size;
+            count++;
+        }
+    });
+    if(count === 0) { el.style.display='none'; return; }
+    
+    const diff = originalTotal - newTotal;
+    const pct = originalTotal > 0 ? Math.round((diff / originalTotal) * 100) : 0;
+    const savedMB = (diff / (1024*1024)).toFixed(2);
+    
+    el.style.display = 'block';
+    if(diff > 0) {
+        el.textContent = `Total Saved: ${savedMB} MB (${pct}%) across ${count} files.`;
+        el.style.background = isDark ? '#064e3b' : '#dcfce7'; 
+        el.style.color = isDark ? '#86efac' : '#166534';
+    } else {
+        el.textContent = `Size Change: +${Math.abs(savedMB)} MB (Files grew) across ${count} files.`;
+        el.style.background = isDark ? '#451a03' : '#fff7ed'; 
+        el.style.color = isDark ? '#fdba74' : '#9a3412';
+    }
+}
+
+// --- FILE HELPERS ---
+function sortFilesBySize(files, mode){ if(!mode||mode==='none') return files.slice(); const arr = files.slice(); if(mode==='size-asc') arr.sort((a,b)=> (a.file.size||0)-(b.file.size||0)); if(mode==='size-desc') arr.sort((a,b)=> (b.file.size||0)-(a.file.size||0)); return arr; }
+function applySizeSelectorTo(files, op, kb){ const threshold = parseInt(kb) || 0; if(op==='gt') files.forEach(f=> f.selected = ((f.file.size||0)/1024) > threshold); if(op==='lt') files.forEach(f=> f.selected = ((f.file.size||0)/1024) < threshold); }
+function readFileAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error('read')); r.readAsDataURL(file); }); }
+
+// --- CORE IMAGE LOGIC ---
+async function convertToJpeg(file, quality){ const data = await readFileAsDataURL(file); return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ try{ const canvas=document.createElement('canvas'); canvas.width=img.naturalWidth; canvas.height=img.naturalHeight; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); canvas.toBlob(b=> b?res(b):rej(new Error('blob')), 'image/jpeg', quality/100); }catch(e){ rej(e); } }; img.onerror=()=>rej(new Error('load')); img.src=data; }); }
+async function resizeGeneric(file, newW, newH, pct){ 
+    const data = await readFileAsDataURL(file); 
+    return new Promise((res,rej)=>{ 
+        const img=new Image(); 
+        img.onload=()=>{ 
+            try{ 
+                let w=img.naturalWidth, h=img.naturalHeight; 
+                if(pct && pct > 0) { const r=pct/100; w=Math.max(1,Math.round(w*r)); h=Math.max(1,Math.round(h*r)); } 
+                else { if(newW&&!newH){ h=Math.round(h*newW/w); w=newW; } else if(!newW&&newH){ w=Math.round(w*newH/h); h=newH; } else if(newW&&newH){ w=newW; h=newH; } } 
+                const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h); 
+                canvas.toBlob(b=> b?res(b):rej(new Error('blob')), file.type||'image/png'); 
+            }catch(e){ rej(e); } 
+        }; img.onerror=()=>rej(new Error('load')); img.src=data; 
+    }); 
+}
+async function compressOrResizeGeneric(file, quality, newW, newH){ const data = await readFileAsDataURL(file); return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ try{ let w=img.naturalWidth, h=img.naturalHeight; if(newW&&!newH){ h=Math.round(h*newW/w); w=newW; } else if(!newW&&newH){ w=Math.round(w*newH/h); h=newH; } else if(newW&&newH){ w=newW; h=newH; } const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h); canvas.toBlob(b=> b?res(b):rej(new Error('blob')), 'image/jpeg', quality/100); }catch(e){ rej(e); } }; img.onerror=()=>rej(new Error('load')); img.src=data; }); }
+async function cropGeneric(file, wPercent, hPercent){ const data = await readFileAsDataURL(file); return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ try{ const sw=img.naturalWidth, sh=img.naturalHeight; const cw=Math.max(1, Math.round(sw*(wPercent/100))); const ch=Math.max(1, Math.round(sh*(hPercent/100))); const sx=Math.max(0, Math.round((sw-cw)/2)); const sy=Math.max(0, Math.round((sh-ch)/2)); const canvas=document.createElement('canvas'); canvas.width=cw; canvas.height=ch; const ctx=canvas.getContext('2d'); ctx.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch); canvas.toBlob(b=> b?res(b):rej(new Error('blob')), file.type||'image/png'); }catch(e){ rej(e); } }; img.onerror=()=>rej(new Error('load')); img.src=data; }); }
+function quantizeImageByPct(file, pct){ return new Promise(async (res, rej)=>{ try{ const data = await readFileAsDataURL(file); const img = new Image(); img.onload = ()=>{ try{ const canvas = document.createElement('canvas'); const w=img.naturalWidth; const h=img.naturalHeight; canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h); const im = ctx.getImageData(0,0,w,h); const levels = Math.max(2, Math.round(2 + (254 * (pct/100)))); const factor = (levels-1)/255; const inv = 255/(levels-1); const d = im.data; for(let i=0;i<d.length;i+=4){ d[i]=Math.round(Math.round(d[i]*factor)*inv); d[i+1]=Math.round(Math.round(d[i+1]*factor)*inv); d[i+2]=Math.round(Math.round(d[i+2]*factor)*inv); } ctx.putImageData(im,0,0); canvas.toBlob(b=> b?res(b):rej(new Error('blob')), 'image/png'); }catch(e){ rej(e); } }; img.onerror = ()=> rej(new Error('load')); img.src = data; }catch(e){ rej(e); } }); }
+
+// --- MAIN INIT ---
+let estimatesEnabled = true;
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  // TAB SWITCHING
+  document.querySelectorAll('.mode-btn').forEach(btn=> btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.mode-btn').forEach(b=> b.classList.remove('active')); btn.classList.add('active'); 
+    document.querySelectorAll('.panel').forEach(p=> p.classList.remove('active'));
+    const panel = safeGet(btn.getAttribute('data-mode')); if(panel) panel.classList.add('active');
+  }));
+
+  safeGet('estimateToggle').addEventListener('click', ()=>{ estimatesEnabled = !estimatesEnabled; safeGet('estimateToggle').textContent = 'Estimates: ' + (estimatesEnabled? 'On':'Off'); });
+
+  // Wiring Helper
+  function wire(opts){
+    const drop = safeGet(opts.dropId); const choose = safeGet(opts.chooseId); const fileIn = safeGet(opts.fileId); const folderIn = safeGet(opts.folderId);
+    if(drop){ 
+        drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.style.borderColor='var(--accent)'; });
+        drop.addEventListener('dragleave', e=>{ e.preventDefault(); drop.style.borderColor='var(--drop)'; });
+        drop.addEventListener('drop', e=>{ e.preventDefault(); drop.style.borderColor='var(--drop)'; opts.handler([...e.dataTransfer.files]); });
+    }
+    if(choose && fileIn){ choose.addEventListener('click', ()=>{ fileIn.value=null; fileIn.click(); }); fileIn.addEventListener('change', ()=> opts.handler([...fileIn.files])); }
+    if(folderIn){ safeGet(opts.folderBtnId).addEventListener('click', ()=>{ folderIn.value=null; folderIn.click(); }); folderIn.addEventListener('change', ()=> opts.handler([...folderIn.files])); }
+  }
+
+  // --- PNG ---
+  const pngFiles=[]; wire({dropId:'pngDrop', chooseId:'pngChoose', fileId:'pngFileInput', folderBtnId:'pngChooseFolder', folderId:'pngFolderInput', handler:l=>handle(l,pngFiles,'png')});
+  syncRange('pngDefaultQ', 'pngDefaultQt', v=>{ pngFiles.forEach(f=>f.quality=v); render('png',pngFiles); });
+  setupFilters('png', pngFiles);
+  safeGet('pngConvert').addEventListener('click', async()=>{ await processBatch(pngFiles, 'pngStatus', async f=> await convertToJpeg(f.file, f.quality||90), 'convertedBlob', 'pngSavings'); render('png',pngFiles); });
+  setupZip('pngZip', 'pngStatus', pngFiles, 'convertedBlob', 'jpg');
+
+  // --- JFIF ---
+  const jfifFiles=[]; wire({dropId:'jfifDrop', chooseId:'jfifChoose', fileId:'jfifFileInput', folderBtnId:'jfifChooseFolder', folderId:'jfifFolderInput', handler:l=>handle(l,jfifFiles,'jfif')});
+  syncRange('jfifDefaultQ', 'jfifDefaultQt', v=>{ jfifFiles.forEach(f=>f.quality=v); render('jfif',jfifFiles); });
+  setupFilters('jfif', jfifFiles);
+  safeGet('jfifConvert').addEventListener('click', async()=>{ await processBatch(jfifFiles, 'jfifStatus', async f=> await convertToJpeg(f.file, f.quality||95), 'convertedBlob', 'jfifSavings'); render('jfif',jfifFiles); });
+  setupZip('jfifZip', 'jfifStatus', jfifFiles, 'convertedBlob', 'jpg');
+
+  // --- JPG ---
+  const jpgFiles=[]; wire({dropId:'jpgDrop', chooseId:'jpgChoose', fileId:'jpgFileInput', folderBtnId:'jpgChooseFolder', folderId:'jpgFolderInput', handler:l=>handle(l,jpgFiles,'jpg')});
+  syncRange('jpgQ', 'jpgQt', v=>{ jpgFiles.forEach(f=>f.quality=v); render('jpg',jpgFiles); });
+  setupFilters('jpg', jpgFiles);
+  safeGet('jpgProcess').addEventListener('click', async()=>{ 
+      const w=parseInt(safeGet('jpgW').value)||null; const h=parseInt(safeGet('jpgH').value)||null;
+      await processBatch(jpgFiles, 'jpgStatus', async f=> await compressOrResizeGeneric(f.file, f.quality||80, w, h), 'processedBlob', 'jpgSavings'); render('jpg',jpgFiles); 
+  });
+  setupZip('jpgZip', 'jpgStatus', jpgFiles, 'processedBlob', 'jpg');
+
+  // --- RESIZE (ANY) ---
+  const anyFiles=[]; wire({dropId:'anyDrop', chooseId:'anyChoose', fileId:'anyFileInput', folderBtnId:'anyChooseFolder', folderId:'anyFolderInput', handler:l=>handle(l,anyFiles,'any')});
+  syncRange('anyPct', 'anyPctT', v=>{}); // just sync inputs
+  setupFilters('any', anyFiles);
+  
+  // Toggle Logic
+  document.getElementsByName('resizeMode').forEach(r=> r.addEventListener('change', ()=>{
+     if(r.value==='pct'){ safeGet('resizePctGroup').style.display='flex'; safeGet('resizeFixedGroup').style.display='none'; }
+     else { safeGet('resizePctGroup').style.display='none'; safeGet('resizeFixedGroup').style.display='flex'; }
+  }));
+
+  safeGet('anyProcess').addEventListener('click', async()=>{ 
+      const mode = document.querySelector('input[name="resizeMode"]:checked').value;
+      const pct = (mode==='pct') ? parseInt(safeGet('anyPct').value) : null;
+      const w = (mode==='fixed') ? (parseInt(safeGet('anyW').value)||null) : null;
+      const h = (mode==='fixed') ? (parseInt(safeGet('anyH').value)||null) : null;
+      await processBatch(anyFiles, 'anyStatus', async f=> await resizeGeneric(f.file, w, h, pct), 'outBlob', 'anySavings'); render('any',anyFiles); 
+  });
+  setupZip('anyZip', 'anyStatus', anyFiles, 'outBlob', null);
+
+  // --- CROP ---
+  const cropFiles=[]; wire({dropId:'cropDrop', chooseId:'cropChoose', fileId:'cropFileInput', folderBtnId:'cropChooseFolder', folderId:'cropFolderInput', handler:l=>handle(l,cropFiles,'crop')});
+  safeGet('cropGlobalW').addEventListener('input', e=>{ safeGet('cropGlobalWv').textContent = e.target.value+'%'; cropFiles.forEach(f=>f.cropWPercent=parseInt(e.target.value)); render('crop',cropFiles); });
+  safeGet('cropGlobalH').addEventListener('input', e=>{ safeGet('cropGlobalHv').textContent = e.target.value+'%'; cropFiles.forEach(f=>f.cropHPercent=parseInt(e.target.value)); render('crop',cropFiles); });
+  setupFilters('crop', cropFiles);
+  safeGet('cropProcess').addEventListener('click', async()=>{ 
+      const gw = parseInt(safeGet('cropGlobalW').value); const gh = parseInt(safeGet('cropGlobalH').value);
+      await processBatch(cropFiles, 'cropStatus', async f=> await cropGeneric(f.file, f.cropWPercent||gw, f.cropHPercent||gh), 'outBlob', 'cropSavings'); render('crop',cropFiles); 
+  });
+  setupZip('cropZip', 'cropStatus', cropFiles, 'outBlob', null);
+
+  // --- REDUCE ---
+  const prFiles=[]; wire({dropId:'pngRedDrop', chooseId:'pngRedChoose', fileId:'pngRedFileInput', folderBtnId:'pngRedChooseFolder', folderId:'pngRedFolderInput', handler:l=>handle(l,prFiles,'pr')});
+  safeGet('pngRedPct').addEventListener('input', e=>{ safeGet('pngRedPctv').textContent = e.target.value+'%'; prFiles.forEach(f=>f.pct=parseInt(e.target.value)); render('pr',prFiles); });
+  setupFilters('pr', prFiles);
+  safeGet('pngRedProcess').addEventListener('click', async()=>{ 
+      const pct=parseInt(safeGet('pngRedPct').value)||100;
+      await processBatch(prFiles, 'pngRedStatus', async f=> await quantizeImageByPct(f.file, f.pct||pct), 'outBlob', 'pngRedSavings'); render('pr',prFiles); 
+  });
+  setupZip('pngRedZip', 'pngRedStatus', prFiles, 'outBlob', null);
+
+
+  // --- SHARED FUNCTIONS ---
+  function syncRange(rid, tid, cb) {
+      const r=safeGet(rid); const t=safeGet(tid);
+      r.addEventListener('input', ()=>{ t.value=r.value; cb(parseInt(r.value)); });
+      t.addEventListener('input', ()=>{ r.value=t.value; cb(parseInt(t.value)); });
+  }
+
+  function setupFilters(key, files) {
+      safeGet(key+'SelectAll').addEventListener('change', e=>{ files.forEach(f=>f.selected=e.target.checked); render(key,files); });
+      safeGet(key+'Sort').addEventListener('change', ()=> render(key,files));
+      // Size filter for some panels
+      if(safeGet(key+'ApplySize')) {
+          safeGet(key+'ApplySize').addEventListener('click', ()=>{
+             applySizeSelectorTo(files, safeGet(key+'SizeOp').value, safeGet(key+'SizeVal').value);
+             render(key,files);
+          });
+      }
+  }
+
+  function handle(list, target, key) {
+      const files = list.filter(f=> f.size>0);
+      if(!files.length) return show(safeGet(key+'Status'||key+'RedStatus'), 'No files detected.');
+      const wrapped = files.map(f=>({ file:f, relativePath:f.webkitRelativePath||f.name, selected:true }));
+      
+      // Inherit defaults
+      if(key==='png'){ const d=parseInt(safeGet('pngDefaultQ').value); wrapped.forEach(w=>w.quality=d); }
+      if(key==='jfif'){ const d=parseInt(safeGet('jfifDefaultQ').value); wrapped.forEach(w=>w.quality=d); }
+      if(key==='jpg'){ const d=parseInt(safeGet('jpgQ').value); wrapped.forEach(w=>w.quality=d); }
+      if(key==='pr'){ const d=parseInt(safeGet('pngRedPct').value); wrapped.forEach(w=>w.pct=d); }
+      if(key==='crop'){ const w=parseInt(safeGet('cropGlobalW').value); const h=parseInt(safeGet('cropGlobalH').value); wrapped.forEach(w=>{w.cropWPercent=w; w.cropHPercent=h;}); }
+      
+      // Dedup
+      const exist = new Set(target.map(x=>x.relativePath));
+      wrapped.forEach(w=>{ if(!exist.has(w.relativePath)) target.push(w); });
+      
+      render(key, target);
+      // Enable buttons
+      const btnId = (key==='png')?'pngConvert' : (key==='jfif')?'jfifConvert' : (key==='jpg')?'jpgProcess' : (key==='any')?'anyProcess' : (key==='crop')?'cropProcess' : 'pngRedProcess';
+      if(safeGet(btnId)) safeGet(btnId).disabled=false;
+  }
+
+  async function processBatch(files, statusId, fn, outKey, saveId) {
+      const status = safeGet(statusId);
+      const active = files.filter(f=>f.selected!==false);
+      show(status, `Processing ${active.length} files...`);
+      for(const f of active) {
+          try {
+              const res = await fn(f);
+              f[outKey] = res;
+          } catch(e) { console.error(e); }
+      }
+      show(status, 'Done.');
+      if(saveId) updateSavingsStats(files, outKey, saveId);
+      
+      // Enable Zip btn
+      const zipBtn = statusId.replace('Status','Zip'); // simplistic
+      if(safeGet(zipBtn)) safeGet(zipBtn).disabled=false;
+  }
+  
+  function setupZip(btnId, statusId, files, blobKey, forceExt) {
+      safeGet(btnId).addEventListener('click', async()=>{
+          const ready = files.filter(f=> f.selected!==false && f[blobKey]);
+          if(!ready.length) return show(safeGet(statusId), 'No processed files.');
+          
+          show(safeGet(statusId), 'Zipping...');
+          await loadJSZip();
+          const zip = new JSZip();
+          ready.forEach(f=> {
+              let name = f.relativePath;
+              if(forceExt) name = name.substring(0, name.lastIndexOf('.')) + '.' + forceExt;
+              // SANITIZE HERE
+              zip.file(sanitizeFilename(name), f[blobKey]);
+          });
+          
+          const b = await zip.generateAsync({type:'blob'});
+          const url = URL.createObjectURL(b);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `converted_${timestamp()}.zip`;
+          a.click();
+          setTimeout(()=> URL.revokeObjectURL(url), 20000);
+          show(safeGet(statusId), 'ZIP Downloaded.');
+      });
+  }
+
+  function render(key, files) {
+      const cont = safeGet(key==='png'?'pngOrig' : key==='jfif'?'jfifOrig' : key==='jpg'?'jpgThumbs' : key==='any'?'anyThumbs' : key==='crop'?'cropThumbs' : 'pngRedThumbs');
+      if(!cont) return;
+      cont.innerHTML = '';
+      
+      // Sort logic
+      const sortId = key==='png'?'pngSort' : key==='jfif'?'jfifSort' : key==='jpg'?'jpgSort' : key==='any'?'anySort' : key==='crop'?'cropSort' : 'pngRedSort';
+      const sVal = safeGet(sortId)? safeGet(sortId).value : 'none';
+      const toShow = sortFilesBySize(files, sVal);
+
+      toShow.forEach(f=> {
+          const div = document.createElement('div'); div.className='thumb';
+          if(f.selected) div.classList.add('selected-highlight');
+          
+          // Checkbox
+          const chk = document.createElement('input'); chk.type='checkbox'; chk.checked=f.selected!==false;
+          chk.addEventListener('change', ()=>{ f.selected=chk.checked; div.classList.toggle('selected-highlight', chk.checked); });
+          
+          // Img
+          const img = document.createElement('img');
+          const reader = new FileReader();
+          reader.onload = e=> img.src=e.target.result;
+          reader.readAsDataURL(f.file);
+          
+          // Details
+          const det = document.createElement('div'); det.className='small';
+          det.textContent = `${f.relativePath} (${Math.round(f.file.size/1024)} KB)`;
+          
+          div.appendChild(chk); div.appendChild(img); div.appendChild(det);
+
+          // Custom Controls per card
+          if(key==='png'||key==='jfif'||key==='jpg') {
+              const qc = document.createElement('div'); qc.className='quality-control';
+              const r = document.createElement('input'); r.type='range'; r.min=10; r.max=100; r.style.width='60px';
+              const t = document.createElement('input'); t.type='number'; t.min=10; t.max=100; t.className='tiny-input';
+              r.value = f.quality || 90; t.value = r.value;
+              r.oninput = ()=>{ t.value=r.value; f.quality=parseInt(r.value); };
+              t.oninput = ()=>{ r.value=t.value; f.quality=parseInt(t.value); };
+              qc.append(document.createTextNode('Q:'), r, t);
+              div.appendChild(qc);
+          }
+          
+          // Estimates
+          if(estimatesEnabled && (key==='png'||key==='jfif'||key==='jpg')) {
+             const est = document.createElement('div'); est.className='small'; est.style.marginTop='4px';
+             est.textContent = 'Est: ...';
+             div.appendChild(est);
+             // Debounced estimation could go here, simplified for this snippet
+             setTimeout(async()=>{
+                 try {
+                    let b;
+                    if(key==='jpg') b = await compressOrResizeGeneric(f.file, f.quality||80, parseInt(safeGet('jpgW').value), parseInt(safeGet('jpgH').value));
+                    else b = await convertToJpeg(f.file, f.quality||90);
+                    est.textContent = `Est: ${Math.round(b.size/1024)} KB`;
+                 } catch(e){}
+             }, 500);
+          }
+
+          // Individual Download of Processed
+          const outKey = (key==='any'||key==='crop'||key==='pr') ? 'outBlob' : (key==='jpg'?'processedBlob':'convertedBlob');
+          if(f[outKey]) {
+              const dl = document.createElement('a');
+              dl.textContent = 'Download Result';
+              dl.className = 'btn';
+              dl.style.marginTop = '6px';
+              dl.style.fontSize = '11px';
+              dl.onclick = ()=>{
+                  const u = URL.createObjectURL(f[outKey]);
+                  const a = document.createElement('a'); a.href=u; 
+                  let n = f.relativePath;
+                  if(key==='png'||key==='jfif') n = n.substring(0,n.lastIndexOf('.'))+'.jpg';
+                  a.download = sanitizeFilename(n);
+                  a.click();
+                  setTimeout(()=>URL.revokeObjectURL(u),10000);
+              };
+              div.appendChild(dl);
+          }
+
+          cont.appendChild(div);
+      });
+  }
+
+});
+</script>
+</body>
+</html>
